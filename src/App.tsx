@@ -254,7 +254,9 @@ function findLabelMatches(line: string): LabelMatch[] {
   for (const candidate of candidates) {
     const immediateTail = line.slice(candidate.end);
     const hasLabelPercent = /^\s*%/.test(immediateTail);
+    const percentWasReadAsQuote = /^[’‘'`´]/.test(immediateTail);
     if (!candidate.rule.percent && hasLabelPercent && ["TC Variável", "TC Fixo"].includes(candidate.rule.key)) continue;
+    if (candidate.rule.key === "Ignorar DEFM" && percentWasReadAsQuote) continue;
 
     const overlaps = selected.some(item =>
       candidate.start < item.end && candidate.end > item.start
