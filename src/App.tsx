@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createWorker } from "tesseract.js";
+import { createWorker, PSM } from "tesseract.js";
 import {
   Upload, RotateCcw, Search, ShieldCheck, Image as ImageIcon,
   X, FileImage, CheckCircle2, AlertTriangle, ScanText
@@ -20,13 +20,14 @@ type ImageEntry = { id: string; file: File; url: string };
 type StatValues = Record<string, number>;
 
 const common = [
-  "VIT", "INT", "PV", "PM", "ATQF", "ATQM", "DEFF", "DEFM",
+  "FOR", "AGI", "VIT", "INT", "DES", "SOR",
+  "PV", "PM", "ATQF", "ATQM", "DEFF", "DEFM",
   "ATQF (Refino)", "ATQM (Refino)", "DEFF (Refino)", "DEFM (Refino)",
   "Recuperar PV", "Recuperar PM", "Precisão", "Esquiva"
 ];
 const advanced = [
-  "VATQ", "VMOV", "TC Variável", "TC Variável %", "TC Fixo", "TC Fixo %",
-  "Efeito de Cura", "Cura Recebida", "CRIT", "RES CRIT", "Dano CRIT %",
+  "VATQ%", "VMOV%", "TC Variável", "TC Variável %", "TC Fixo", "TC Fixo %",
+  "Efeito de Cura", "Cura Recebida", "CRIT", "RES CRIT", "Dano CRIT%",
   "Resistência a Dano CRIT %", "Bônus de Dano Físico", "Redução de Dano Físico",
   "Bônus de Dano Mágico", "Redução de Dano Mágico", "Ignorar DEFF", "Ignorar DEFM",
   "Ignorar DEFF %", "Ignorar DEFM %", "Bônus de Dano Fixo", "Dano Mágico Bônus",
@@ -36,14 +37,26 @@ const advanced = [
 const special = [
   "PV Máx.%", "PM Máx.%", "ATQF Equipamento %", "ATQM Equipamento %",
   "DEFF Equipamento %", "DEFM Equipamento %", "TdR Global",
-  "Dano/Redução x Pequenos", "Dano/Redução x Médios", "Dano/Redução x Grandes",
-  "Dano Bruto", "Dano/Redução x Humanoide", "Dano/Redução x Demônio",
-  "Dano/Redução x Planta", "Dano/Redução x Morto-Vivo", "Dano/Redução x Peixe",
-  "Dano/Redução x Dragão", "Dano Habilidade Vento / Resistência Vento",
-  "Dano Habilidade Terra / Redução Terra", "Dano Habilidade Fogo / Resistência Fogo",
-  "Dano Habilidade Água / Redução Água", "Resistência Neutro",
-  "Dano Habilidade Fantasma / Resistência Fantasma", "Redução Veneno",
-  "Dano x Inimigo Vento, Fogo, Água, Sagrado", "Redução x Chefe"
+  "Dano x Inimigos Pequenos", "Redução de Dano x Inimigos Pequenos",
+  "Dano x Inimigos Médios", "Redução de Dano x Inimigos Médios",
+  "Dano x Inimigos Grandes", "Redução de Dano x Inimigos Grandes",
+  "Dano Bruto",
+  "Dano x Humanoide", "Redução de Dano x Humanoide",
+  "Dano x Demônio", "Redução de Dano x Demônio",
+  "Dano x Planta", "Redução de Dano x Planta",
+  "Dano x Morto-Vivo", "Redução de Dano x Morto-Vivo",
+  "Dano x Peixe", "Redução de Dano x Peixe",
+  "Dano x Dragão", "Redução de Dano x Dragão",
+  "Dano de Habilidade Vento", "Resistência de Dano de Vento",
+  "Dano de Habilidade Terra", "Redução de Dano de Habilidade de Terra",
+  "Dano de Habilidade Fogo", "Resistência de Dano de Fogo",
+  "Dano de Habilidade Água", "Redução de Dano de Água",
+  "Resistência de Dano Neutro",
+  "Dano de Habilidade Fantasma", "Resistência de Dano Fantasma",
+  "Redução de Dano de Veneno",
+  "Dano x Inimigo de Vento", "Dano x Inimigo de Fogo",
+  "Dano x Inimigo de Água", "Dano x Inimigo Sagrado",
+  "Redução de Dano x Chefe"
 ];
 const groups: Record<StatGroup, string[]> = {
   Comuns: common,
@@ -94,36 +107,103 @@ function formatNumber(value: number, percentage = false): string {
 type OcrRule = { key: string; aliases: string[]; percent?: boolean };
 
 const ocrAliases: Record<string, string[]> = {
+  "FOR": ["FOR", "STR", "FORCA"],
+  "AGI": ["AGI", "AGILIDADE"],
   "VIT": ["VIT", "VITALIDADE"],
-  "INT": ["INT", "INTELIGENCIA", "INTELLIGENCE"],
-  "PV": ["PV", "HP", "VIDA", "MAX HP", "HP MAX"],
-  "PM": ["PM", "SP", "MANA", "MAX SP", "SP MAX"],
-  "ATQF": ["ATQF", "ATQ F", "ATKF", "ATK F", "PHYSICAL ATTACK", "ATAQUE FISICO"],
-  "ATQM": ["ATQM", "ATQ M", "MATK", "M ATK", "MAGIC ATTACK", "ATAQUE MAGICO"],
-  "DEFF": ["DEFF", "DEF F", "PDEF", "PHYSICAL DEFENSE", "DEFESA FISICA"],
-  "DEFM": ["DEFM", "DEF M", "MDEF", "M DEF", "MAGIC DEFENSE", "DEFESA MAGICA"],
-  "ATQF (Refino)": ["ATQF REF", "ATQF REFINO", "ATK REFINE"],
-  "ATQM (Refino)": ["ATQM REF", "ATQM REFINO", "MATK REFINE"],
+  "INT": ["INT", "INTELIGENCIA"],
+  "DES": ["DES", "DEX", "DESTREZA"],
+  "SOR": ["SOR", "LUK", "SORTE"],
+  "PV": ["PV", "HP", "VIDA", "HP MAX"],
+  "PM": ["PM", "SP", "MANA", "SP MAX"],
+  "ATQF": ["ATQF", "ATGF", "ATQ F", "ATK F", "P ATK"],
+  "ATQM": ["ATQM", "ATQ M", "MATK", "M ATK"],
+  "DEFF": ["DEFF", "DEF F", "PDEF", "P DEF"],
+  "DEFM": ["DEFM", "DEF M", "MDEF", "M DEF"],
+  "ATQF (Refino)": ["ATQF REF", "ATGF REF", "ATQF REFINO", "ATGF REFINO", "ATQF REFIN"],
+  "ATQM (Refino)": ["ATQM REF", "ATQM REFINO", "ATQM REFINA"],
   "DEFF (Refino)": ["DEFF REF", "DEFF REFINO"],
   "DEFM (Refino)": ["DEFM REF", "DEFM REFINO"],
-  "Precisão": ["PRECISAO", "PRECISION", "ACCURACY"],
+  "Precisão": ["PRECISAO", "PRECISÃO", "PRECISION"],
   "Esquiva": ["ESQUIVA", "FLEE", "EVASION"],
-  "PV Máx.%": ["PV MAX %", "PV MAXIMO %", "MAX HP %", "HP MAX %", "MAXIMUM HP %"],
-  "PM Máx.%": ["PM MAX %", "PM MAXIMO %", "MAX SP %", "SP MAX %", "MAXIMUM SP %"],
-  "TC Variável": ["TC VARIAVEL", "CONJURACAO VARIAVEL", "VARIABLE CAST TIME"],
-  "TC Fixo": ["TC FIXO", "CONJURACAO FIXA", "FIXED CAST TIME"],
-  "CRIT": ["CRIT", "CRITICAL"],
-  "RES CRIT": ["RES CRIT", "CRITICAL RES"],
-  "Ignorar DEFF": ["IGNORAR DEFF", "IGNORE PDEF"],
-  "Ignorar DEFM": ["IGNORAR DEFM", "IGNORE MDEF"]
+  "VATQ%": ["VATQ%", "VATQ"],
+  "VMOV%": ["VMOV%", "VMOV"],
+  "PV Máx.%": ["PV MAX %", "PV MAX%", "PV MAXIMO %", "MAX HP %"],
+  "PM Máx.%": ["PM MAX %", "PM MAX%", "PM MAXIMO %", "MAX SP %"],
+  "ATQF Equipamento %": ["ATQF DE EQUIPAMENTO%", "ATGF DE EQUIPAMENTO%", "ATQF EQUIPAMENTO %"],
+  "ATQM Equipamento %": ["ATQM DE EQUIPAMENTO%", "ATQM EQUIPAMENTO %"],
+  "DEFF Equipamento %": ["DEFF DE EQUIPAMENTO%", "DEFF EQUIPAMENTO %"],
+  "DEFM Equipamento %": ["DEFM DE EQUIPAMENTO%", "DEFM EQUIPAMENTO %"],
+  "TdR Global": ["TDR GLOBAL%", "TDR GLOBAL"],
+  "TC Variável": ["TC VARIAVEL", "CONJURACAO VARIAVEL"],
+  "TC Variável %": ["TC VARIAVEL %", "TC VARIAVEL%", "CONJURACAO VARIAVEL %"],
+  "TC Fixo": ["TC FIXO", "CONJURACAO FIXA"],
+  "TC Fixo %": ["TC FIXO %", "TC FIXO%", "CONJURACAO FIXA %"],
+  "Efeito de Cura": ["EFEITO DE CURA"],
+  "Cura Recebida": ["CURA RECEBIDA", "URA RECEBIDA"],
+  "CRIT": ["CRIT", "CRITICO"],
+  "RES CRIT": ["RES CRIT", "RES CRIT."],
+  "Dano CRIT%": ["DANO CRIT%", "DANO CRIT %"],
+  "Resistência a Dano CRIT %": ["RESISTENCIA A DANO CRIT", "RESISTENCIA DANO CRIT", "5 A DANO CRIT"],
+  "Bônus de Dano Físico": ["BONUS DE DANO FISICO", "NUS DE DANO F", "DANO FISICO"],
+  "Redução de Dano Físico": ["REDUCAO DE DANO FISICO", "EDUCAO DE DAR"],
+  "Bônus de Dano Mágico": ["BONUS DE DANO MAGICO", "NUS DANO M", "NUS DANO M%"],
+  "Redução de Dano Mágico": ["REDUCAO DE DANO MAGICO", "REDUCAO DE D"],
+  "Ignorar DEFF": ["IGNORAR DEFF", "IGNORAR DEF F"],
+  "Ignorar DEFM": ["IGNORAR DEFM", "IGNORAR DEF M"],
+  "Ignorar DEFF %": ["IGNORAR DEFF %", "IGNORAR DEFF%"],
+  "Ignorar DEFM %": ["IGNORAR DEFM %", "IGNORAR DEFM%"],
+  "Bônus de Dano Fixo": ["BONUS DE DANO FIXO", "NUS DE DANO"],
+  "Dano Mágico Bônus": ["DANO MAGICO BONUS", "DANO M BONUS"],
+  "Redução de Dano Fixo": ["REDUCAO DE DANO FIXO", "ADUCAO DE DAR"],
+  "Bônus de Dano à Distância": ["BONUS DE DANO A DISTANCIA", "IUS DE DANO JX"],
+  "Redução de Dano à Distância": ["REDUCAO DE DANO A DISTANCIA", "CAO DE DANO J"],
+  "Bônus de Dano Corpo a Corpo": ["BONUS DE DANO CORPO A CORPO", "3 ONUS DE DANC"],
+  "Dano x Inimigos Pequenos": ["DANO X INIMIGOS PEQUENOS", "DANO X INIMIGO PEQUENO"],
+  "Redução de Dano x Inimigos Pequenos": ["REDUCAO DE DANO X INIMIGOS PEQUENOS"],
+  "Dano x Inimigos Médios": ["DANO X INIMIGOS MEDIOS", "DANO X INIMIGO MEDIO"],
+  "Redução de Dano x Inimigos Médios": ["REDUCAO DE DANO X INIMIGOS MEDIOS"],
+  "Dano x Inimigos Grandes": ["DANO X INIMIGOS GRANDES", "DANO X INIMIGO GRANDE"],
+  "Redução de Dano x Inimigos Grandes": ["REDUCAO DE DANO X INIMIGOS GRANDES"],
+  "Dano Bruto": ["DANO BRUTO", "DANO X BRUTO"],
+  "Dano x Humanoide": ["DANO X HUMANOIDE"],
+  "Redução de Dano x Humanoide": ["REDUCAO DE DANO X HUMANOIDE", "REDUCAO DE DANO X HUMANIDADE"],
+  "Dano x Demônio": ["DANO X DEMONIO"],
+  "Redução de Dano x Demônio": ["REDUCAO DE DANO X DEMONIO"],
+  "Dano x Planta": ["DANO X PLANTA"],
+  "Redução de Dano x Planta": ["REDUCAO DE DANO X PLANTA"],
+  "Dano x Morto-Vivo": ["DANO X MORTO VIVO"],
+  "Redução de Dano x Morto-Vivo": ["REDUCAO DE DANO X MORTO VIVO"],
+  "Dano x Peixe": ["DANO X PEIXE"],
+  "Redução de Dano x Peixe": ["REDUCAO DE DANO X PEIXE"],
+  "Dano x Dragão": ["DANO X DRAGAO"],
+  "Redução de Dano x Dragão": ["REDUCAO DE DANO X DRAGAO"],
+  "Dano de Habilidade Vento": ["DANO DE HABILIDADE VENTO", "DANO HABILIDADE VENTO"],
+  "Resistência de Dano de Vento": ["RESISTENCIA DE DANO DE VENTO", "RESISTENCIA DANO VENTO"],
+  "Dano de Habilidade Terra": ["DANO DE HABILIDADE TERRA", "DANO HABILIDADE TERRA", "DANO DE HABILIDADE DE TM"],
+  "Redução de Dano de Habilidade de Terra": ["REDUCAO DE DANO DE HABILIDADE DE TERRA", "REDUCAO DANO HABILIDADE TERRA"],
+  "Dano de Habilidade Fogo": ["DANO DE HABILIDADE FOGO", "DANO HABILIDADE FOGO"],
+  "Resistência de Dano de Fogo": ["RESISTENCIA DE DANO DE FOGO", "RESISTENCIA DANO FOGO"],
+  "Dano de Habilidade Água": ["DANO DE HABILIDADE AGUA", "DANO HABILIDADE AGUA"],
+  "Redução de Dano de Água": ["REDUCAO DE DANO DE AGUA"],
+  "Resistência de Dano Neutro": ["RESISTENCIA DE DANO NEUTRO", "RESISTENCIA NEUTRO"],
+  "Dano de Habilidade Fantasma": ["DANO DE HABILIDADE FANTASMA", "DANO HABILIDADE FANTASMA"],
+  "Resistência de Dano Fantasma": ["RESISTENCIA DE DANO FANTASMA"],
+  "Redução de Dano de Veneno": ["REDUCAO DE DANO DE VENENO", "REDUCAO VENENO"],
+  "Dano x Inimigo de Vento": ["DANO X INIMIGO DE VENTO", "DANO X INIMIGO VENTO"],
+  "Dano x Inimigo de Fogo": ["DANO X INIMIGO DE FOGO", "DANO X INIMIGO FOGO"],
+  "Dano x Inimigo de Água": ["DANO X INIMIGO DE AGUA", "DANO X INIMIGO AGUA"],
+  "Dano x Inimigo Sagrado": ["DANO X INIMIGO SAGRADO"],
+  "Redução de Dano x Chefe": ["REDUCAO DE DANO X CHEFE", "REDUCAO X CHEFE"]
 };
 
 const ocrRules: OcrRule[] = allStats.map(key => ({
   key,
-  aliases: [key, ...(ocrAliases[key] ?? [])],
+  aliases: [...new Set([key, ...(ocrAliases[key] ?? [])])],
   percent: key.includes("%")
-})).sort((a, b) => Math.max(...b.aliases.map(alias => normalizeText(alias).length))
-  - Math.max(...a.aliases.map(alias => normalizeText(alias).length)));
+})).sort((a, b) =>
+  Math.max(...b.aliases.map(alias => normalizeText(alias).length))
+  - Math.max(...a.aliases.map(alias => normalizeText(alias).length))
+);
 
 type LabelMatch = { rule: OcrRule; start: number; end: number; aliasLength: number };
 
@@ -172,32 +252,26 @@ function findLabelMatches(line: string): LabelMatch[] {
   candidates.sort((a, b) => a.start - b.start || b.aliasLength - a.aliasLength);
   const selected: LabelMatch[] = [];
   for (const candidate of candidates) {
+    const immediateTail = line.slice(candidate.end);
+    const hasLabelPercent = /^\s*%/.test(immediateTail);
+    if (candidate.rule.percent && !hasLabelPercent && !/porcento/i.test(immediateTail.slice(0, 10))) {
+      continue;
+    }
+    if (!candidate.rule.percent && hasLabelPercent) continue;
+
     const overlaps = selected.some(item =>
       candidate.start < item.end && candidate.end > item.start
     );
     if (overlaps) continue;
-
-    const rawTail = line.slice(candidate.end, Math.min(
-      line.length,
-      candidates.find(item => item.start > candidate.start)?.start ?? line.length
-    ));
-    if (candidate.rule.percent && !rawTail.includes("%") && !/porcento/i.test(rawTail)) continue;
-    if (!candidate.rule.percent && rawTail.includes("%") && ["PV", "PM"].includes(candidate.rule.key)) {
-      const percentRule = selected.find(item =>
-        item.start === candidate.start && item.rule.percent
-      );
-      if (percentRule) continue;
-    }
     selected.push(candidate);
   }
   return selected.sort((a, b) => a.start - b.start);
 }
 
 function numbersInText(value: string, percentage = false): number[] {
-  const matches = value.match(/[-+]?\d[\d.,]*/g) ?? [];
-  return matches
-    .map(item => parseNumber(item, percentage))
-    .filter(item => Number.isFinite(item));
+  const normalizedValue = value.replace(/\b[oO]\b/g, "0");
+  const matches = normalizedValue.match(/[-+]?\d[\d.,]*/g) ?? [];
+  return matches.map(item => parseNumber(item, percentage)).filter(Number.isFinite);
 }
 
 function valuesFromOcr(text: string, sumDuplicates: boolean): StatValues {
@@ -209,39 +283,65 @@ function valuesFromOcr(text: string, sumDuplicates: boolean): StatValues {
     const labels = findLabelMatches(line);
     if (!labels.length) continue;
 
-    const inlineValues: (number | undefined)[] = labels.map((label, labelIndex) => {
+    const numericByLabel: number[][] = labels.map((label, labelIndex) => {
       const nextLabel = labels[labelIndex + 1];
       const segment = line.slice(label.end, nextLabel?.start ?? line.length);
-      return numbersInText(segment, label.rule.percent)[0];
+      return numbersInText(segment, label.rule.percent);
     });
 
-    let followingNumbers: number[] = [];
-    if (inlineValues.some(value => value === undefined)) {
-      for (let nextIndex = lineIndex + 1; nextIndex < Math.min(lineIndex + 4, lines.length); nextIndex += 1) {
-        if (findLabelMatches(lines[nextIndex]).length) {
-          followingNumbers = [];
-          break;
+    labels.forEach((label, labelIndex) => {
+      let numbers = numericByLabel[labelIndex];
+      if (!numbers.length) {
+        const following: number[] = [];
+        for (let nextIndex = lineIndex + 1; nextIndex < Math.min(lineIndex + 5, lines.length); nextIndex += 1) {
+          if (findLabelMatches(lines[nextIndex]).length) break;
+          const rowNumbers = numbersInText(lines[nextIndex], label.rule.percent);
+          if (rowNumbers.length) following.push(...rowNumbers);
+          if (following.length >= 3) break;
         }
-        followingNumbers = numbersInText(lines[nextIndex]);
-        if (followingNumbers.length) break;
+        numbers = following;
       }
-    }
+      if (!numbers.length) return;
 
-    labels.forEach((label, index) => {
-      const inlineValue = inlineValues[index];
-      let parsed = inlineValue;
-      if (parsed === undefined && labels.length > 1 && followingNumbers.length >= labels.length) {
-        parsed = followingNumbers[index];
-      } else if (parsed === undefined && followingNumbers.length) {
-        parsed = followingNumbers[0];
+      let parsed = numbers[0];
+      if (["FOR", "AGI", "VIT", "INT", "DES", "SOR"].includes(label.rule.key) && numbers.length >= 2) {
+        parsed = numbers[0] + numbers[1];
       }
-      if (parsed === undefined) return;
-
       if (sumDuplicates) output[label.rule.key] = (output[label.rule.key] ?? 0) + parsed;
       else output[label.rule.key] = parsed;
     });
   }
+
   return output;
+}
+
+function extractCharacterMeta(text: string): { character?: string; className?: ClassName } {
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const classIndex = lines.findIndex(line => /classe/i.test(line));
+  let className: ClassName | undefined;
+  if (classIndex >= 0) {
+    const nearby = normalizeText(lines.slice(classIndex, classIndex + 2).join(" "));
+    if (nearby.includes("arquimago") || nearby.includes("highwizard") || nearby.includes("wizard")) className = "Wizard";
+    else if (nearby.includes("paladino") || nearby.includes("paladin")) className = "Paladino";
+    else if (nearby.includes("cigana") || nearby.includes("musa")) className = "Cigana";
+    else if (nearby.includes("priest") || nearby.includes("arcebispo") || nearby.includes("sacerdote")) className = "Priest";
+    else if (nearby.includes("sniper") || nearby.includes("sentinela") || nearby.includes("atirador")) className = "Sniper";
+  }
+
+  let character: string | undefined;
+  if (classIndex >= 0) {
+    const ignored = /personagem|classe|build|detalhes|atributos|equipamento|automatica|nenhum|pactuado|id\d*|pv|pm/i;
+    for (let index = classIndex - 1; index >= Math.max(0, classIndex - 7); index -= 1) {
+      const candidate = lines[index].replace(/[|:()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
+      if (!candidate || ignored.test(candidate) || !/[A-Za-zÀ-ÿ]{3}/.test(candidate)) continue;
+      const words = candidate.split(" ").filter(Boolean);
+      if (words.length <= 2 && candidate.length <= 24) {
+        character = candidate.replace(/^[^A-Za-zÀ-ÿ]+|[^A-Za-zÀ-ÿ]+$/g, "");
+        break;
+      }
+    }
+  }
+  return { character, className };
 }
 
 function mergeEquipmentOcr(texts: string[]): StatValues {
