@@ -353,6 +353,10 @@ export default function App() {
     ? (personalizedB + (replacementGearStats.PV ?? 0)
       + classCoefficient.k * (currentVit + (replacementGearStats.VIT ?? 0))) * hpMultiplierNext
     : 0;
+  const calculatorProjectedValues = {
+    ...projectedValues,
+    PV: canCalculateHp ? hpProjected : (projectedValues.PV ?? 0)
+  };
 
   function updateStat(key: string, value: string) {
     setStats(previous => ({ ...previous, [key]: value }));
@@ -472,6 +476,8 @@ export default function App() {
 
   function reset() {
     if (!window.confirm("Zerar todos os valores e remover as imagens carregadas?")) return;
+    [...characterImages, ...currentGearImages, ...replacementGearImages]
+      .forEach(image => URL.revokeObjectURL(image.url));
     setCharacter("");
     setCls("Wizard");
     setStats({ ...zeroStats });
@@ -613,12 +619,14 @@ export default function App() {
             <Search size={15} />
             <input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Buscar atributo…" />
           </div>
-          <AttributeRows
-            names={visibleStats}
-            currentValues={stats}
-            projectedValues={projectedValues}
-            onChange={updateStat}
-          />
+          <div className="attribute-table-scroll">
+            <AttributeRows
+              names={visibleStats}
+              currentValues={stats}
+              projectedValues={calculatorProjectedValues}
+              onChange={updateStat}
+            />
+          </div>
           <div className="comparison-legend">
             <span><i className="legend-current" /> Atual: valor lido no personagem</span>
             <span><i className="legend-projected" /> Projetado: atual − equipamento atual + substituto</span>
