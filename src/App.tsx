@@ -254,16 +254,16 @@ function findLabelMatches(line: string): LabelMatch[] {
       while (searchFrom < normalized.length) {
         const foundAt = normalized.indexOf(foldedAlias, searchFrom);
         if (foundAt < 0) break;
-        const beforeCharacter = normalized[foundAt - 1];
-        const afterCharacter = normalized[foundAt + foldedAlias.length];
+        const rawStart = positions[foundAt];
+        const rawEnd = positions[foundAt + foldedAlias.length - 1] + 1;
+        const beforeCharacter = rawStart > 0 ? normalizeText(line[rawStart - 1]) : "";
+        const afterCharacter = rawEnd < line.length ? normalizeText(line[rawEnd]) : "";
         const startsInsideWord = Boolean(beforeCharacter && /[a-z0-9]/.test(beforeCharacter));
         const endsInsideWord = Boolean(afterCharacter && /[a-z0-9]/.test(afterCharacter));
         if (startsInsideWord || endsInsideWord) {
           searchFrom = foundAt + 1;
           continue;
         }
-        const rawStart = positions[foundAt];
-        const rawEnd = positions[foundAt + foldedAlias.length - 1] + 1;
         if (rawStart !== undefined && rawEnd > rawStart) {
           candidates.push({
             rule,
