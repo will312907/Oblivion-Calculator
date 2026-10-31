@@ -3,9 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "server": "tsx server/index.ts",
     "start": "node dist-server/index.js",
@@ -19,7 +22,7 @@
     "react-dom": "^18.3.1",
     "tesseract.js": "^6.0.1",
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "express": "^4.21.2",
+    "express": "^5.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
