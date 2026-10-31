@@ -56,7 +56,11 @@ const special = [
   "Redução de Dano de Veneno",
   "Dano x Inimigo de Vento", "Dano x Inimigo de Fogo",
   "Dano x Inimigo de Água", "Dano x Inimigo Sagrado",
-  "Redução de Dano x Chefe"
+  "Redução de Dano x Chefe",
+  "Resistência de Dano Sombrio",
+  "Resistência de Dano Morto-Vivo",
+  "Custo de PM",
+  "Dano de Habilidade Sagrado"
 ];
 const groups: Record<StatGroup, string[]> = {
   Comuns: common,
@@ -193,7 +197,11 @@ const ocrAliases: Record<string, string[]> = {
   "Dano x Inimigo de Fogo": ["DANO X INIMIGO DE FOGO", "DANO X INIMIGO FOGO"],
   "Dano x Inimigo de Água": ["DANO X INIMIGO DE AGUA", "DANO X INIMIGO AGUA"],
   "Dano x Inimigo Sagrado": ["DANO X INIMIGO SAGRADO"],
-  "Redução de Dano x Chefe": ["REDUCAO DE DANO X CHEFE", "REDUCAO X CHEFE"]
+  "Redução de Dano x Chefe": ["REDUCAO DE DANO X CHEFE", "REDUCAO X CHEFE"],
+  "Resistência de Dano Sombrio": ["RESISTENCIA DE DANO SOMBRIO", "RESISTENCIA DANO SOMBRIO"],
+  "Resistência de Dano Morto-Vivo": ["RESISTENCIA DE DANO MORTO VIVO", "RESISTENCIA MORTO VIVO"],
+  "Custo de PM": ["CUSTO DE PM", "CUSTO PM"],
+  "Dano de Habilidade Sagrado": ["DANO DE HABILIDADE SAGRADO", "DANO HABILIDADE SAGRADO"]
 };
 
 const ocrRules: OcrRule[] = allStats.map(key => ({
@@ -304,7 +312,12 @@ function valuesFromOcr(text: string, sumDuplicates: boolean): StatValues {
 
       let parsed = numbers[0];
       if (["FOR", "AGI", "VIT", "INT", "DES", "SOR"].includes(label.rule.key) && numbers.length >= 2) {
+        // On the basic attributes panel, the game shows Base, Equipment/Other, and REQ.
+        // Sum the first two values and never include the REQ column.
         parsed = numbers[0] + numbers[1];
+      } else if (label.rule.percent && Number.isInteger(parsed) && Math.abs(parsed) >= 1000 && Math.abs(parsed) < 100000) {
+        // Tesseract sometimes drops the decimal in values like 112.13% -> 11213.
+        parsed = parsed / 100;
       }
       if (sumDuplicates) output[label.rule.key] = (output[label.rule.key] ?? 0) + parsed;
       else output[label.rule.key] = parsed;
@@ -312,6 +325,101 @@ function valuesFromOcr(text: string, sumDuplicates: boolean): StatValues {
   }
 
   return output;
+}
+
+type OcrWord = {
+  text: string;
+  confidence?: number;
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+};
+
+type RecognizedImage = { text: string; words: OcrWord[] };
+
+function valuesFromOcrLayout(words: OcrWord[]): StatValues {
+  const usable = words.filter(word =>
+    word.text.trim() && word.bbox && Number.isFinite(word.bbox.x0) && Number.isFinite(word.bbox.y0)
+  );
+  if (!usable.length) return {};
+
+  const heights = usable.map(word => Math.max(1, word.bbox.y1 - word.bbox.y0)).sort((a,b) => a-b);
+  const medianHeight = heights[Math.floor(heights.length / 2)] ?? 16;
+  const rowTolerance = Math.max(6, Math.min(18, medianHeight * 0.62));
+  const rows: OcrWord[][] = [];
+
+  usable.sort((a,b) => {
+    const ay=(a.bbox.y0+a.bbox.y1)/2, by=(b.bbox.y0+b.bbox.y1)/2;
+    return ay-by || a.bbox.x0-b.bbox.x0;
+  });
+
+  for (const word of usable) {
+    const centerY=(word.bbox.y0+word.bbox.y1)/2;
+    let bestRow: OcrWord[] | undefined;
+    let bestDistance=Infinity;
+    for (const row of rows) {
+      const rowCenter=row.reduce((sum,item)=>sum+(item.bbox.y0+item.bbox.y1)/2,0)/row.length;
+      const distance=Math.abs(centerY-rowCenter);
+      if(distance<rowTolerance && distance<bestDistance){bestRow=row;bestDistance=distance;}
+    }
+    if(bestRow) bestRow.push(word);
+    else rows.push([word]);
+  }
+
+  const output: StatValues = {};
+  for (const row of rows) {
+    row.sort((a,b)=>a.bbox.x0-b.bbox.x0);
+    const pieces: { start:number; end:number; word:OcrWord }[]=[];
+    let line="";
+    row.forEach((word,index)=>{
+      if(index) line+=" ";
+      const start=line.length;
+      line+=word.text;
+      pieces.push({start,end:line.length,word});
+    });
+
+    const labels=findLabelMatches(line);
+    if(!labels.length) continue;
+
+    labels.forEach((label,labelIndex)=>{
+      const startPiece=pieces.find(piece=>piece.end>label.start);
+      const endPiece=[...pieces].reverse().find(piece=>piece.start<label.end);
+      if(!startPiece||!endPiece) return;
+      const nextLabel=labels[labelIndex+1];
+      const nextPiece=nextLabel?pieces.find(piece=>piece.start>=nextLabel.start):undefined;
+      const rightLimit=nextPiece?.word.bbox.x0 ?? Infinity;
+      const valueWords=pieces
+        .filter(piece=>piece.word.bbox.x0>=endPiece.word.bbox.x1-1 && piece.word.bbox.x0<rightLimit)
+        .map(piece=>piece.word)
+        .filter(word=>/[-+]?\d/.test(word.text));
+      const numbers=valueWords
+        .map(word=>parseNumber(word.text,label.rule.percent))
+        .filter(Number.isFinite);
+      if(!numbers.length) return;
+
+      let parsed=numbers[0];
+      if(["FOR","AGI","VIT","INT","DES","SOR"].includes(label.rule.key) && numbers.length>=2){
+        // The third number in this game panel is REQ and is deliberately excluded.
+        parsed=numbers[0]+numbers[1];
+      } else if(label.rule.percent && Number.isInteger(parsed) && Math.abs(parsed)>=1000 && Math.abs(parsed)<100000){
+        parsed/=100;
+      }
+
+      output[label.rule.key]=parsed;
+    });
+  }
+  return output;
+}
+
+function valuesFromRecognizedImages(images: RecognizedImage[], sumDuplicates: boolean): StatValues {
+  const combined: StatValues = {};
+  for (const image of images) {
+    const layoutValues=valuesFromOcrLayout(image.words);
+    const parsed=Object.keys(layoutValues).length ? layoutValues : valuesFromOcr(image.text,false);
+    for(const [key,value] of Object.entries(parsed)){
+      if(sumDuplicates) combined[key]=(combined[key]??0)+value;
+      else combined[key]=value;
+    }
+  }
+  return combined;
 }
 
 function extractCharacterMeta(text: string): { character?: string; className?: ClassName } {
@@ -553,10 +661,10 @@ export default function App() {
     setStats(previous => ({ ...previous, [key]: value }));
   }
 
-  async function recognizeImages(images: ImageEntry[]): Promise<string[]> {
+  async function recognizeImages(images: ImageEntry[]): Promise<RecognizedImage[]> {
     if (!images.length) return [];
     const worker = await createWorker(["por", "eng"]);
-    const texts: string[] = [];
+    const results: RecognizedImage[] = [];
     try {
       await worker.setParameters({
         tessedit_pageseg_mode: PSM.SPARSE_TEXT,
@@ -564,12 +672,19 @@ export default function App() {
       });
       for (const image of images) {
         const result = await worker.recognize(image.file);
-        texts.push(result.data.text);
+        results.push({
+          text: result.data.text,
+          words: (result.data.words ?? []).map(word => ({
+            text: word.text,
+            confidence: word.confidence,
+            bbox: word.bbox
+          }))
+        });
       }
     } finally {
       await worker.terminate();
     }
-    return texts;
+    return results;
   }
 
   async function onCharacterImagesChange(images: ImageEntry[]) {
