@@ -91,67 +91,155 @@ function formatNumber(value: number, percentage = false): string {
   });
 }
 
-type OcrRule = { key: string; alias: string; percent?: boolean };
-const customAliases: OcrRule[] = [
-  { key: "PV Máx.%", alias: "PV MÁX. %", percent: true },
-  { key: "PV Máx.%", alias: "PV MAX %", percent: true },
-  { key: "PM Máx.%", alias: "PM MÁX. %", percent: true },
-  { key: "PM Máx.%", alias: "PM MAX %", percent: true },
-  { key: "PV", alias: "PV MÁX. FIXO" },
-  { key: "PV", alias: "PV MÁX." },
-  { key: "PV", alias: "PV MAX" },
-  { key: "PV", alias: "HP" },
-  { key: "PM", alias: "PM MÁX." },
-  { key: "PM", alias: "MP" },
-  { key: "ATQF", alias: "ATQ F" },
-  { key: "ATQM", alias: "ATQ M" },
-  { key: "DEFF", alias: "DEF F" },
-  { key: "DEFM", alias: "DEF M" },
-  { key: "Precisão", alias: "PRECISAO" },
-  { key: "Esquiva", alias: "FLEE" },
-  { key: "TC Variável", alias: "TEMPO DE CONJURAÇÃO VARIÁVEL" },
-  { key: "TC Fixo", alias: "TEMPO DE CONJURAÇÃO FIXO" },
-  { key: "Ignorar DEFF", alias: "IGNORAR DEF F" },
-  { key: "Ignorar DEFM", alias: "IGNORAR DEF M" }
-];
-const ocrRules: OcrRule[] = [
-  ...allStats.map(key => ({ key, alias: key, percent: key.includes("%") })),
-  ...customAliases
-].sort((a, b) => normalizeText(b.alias).length - normalizeText(a.alias).length);
+type OcrRule = { key: string; aliases: string[]; percent?: boolean };
 
-function matchRule(line: string): OcrRule | undefined {
-  const normalizedLine = normalizeText(line);
-  if (!normalizedLine) return undefined;
-  return ocrRules.find(rule => {
-    const alias = normalizeText(rule.alias);
-    if (!alias || !normalizedLine.startsWith(alias)) return false;
-    if (rule.percent && !(/%/.test(line) || normalizeText(line).includes("porcento"))) return false;
-    return true;
-  });
+const ocrAliases: Record<string, string[]> = {
+  "VIT": ["VIT", "VITALIDADE"],
+  "INT": ["INT", "INTELIGENCIA", "INTELLIGENCE"],
+  "PV": ["PV", "HP", "VIDA", "MAX HP", "HP MAX"],
+  "PM": ["PM", "SP", "MANA", "MAX SP", "SP MAX"],
+  "ATQF": ["ATQF", "ATQ F", "ATKF", "ATK F", "PHYSICAL ATTACK", "ATAQUE FISICO"],
+  "ATQM": ["ATQM", "ATQ M", "MATK", "M ATK", "MAGIC ATTACK", "ATAQUE MAGICO"],
+  "DEFF": ["DEFF", "DEF F", "PDEF", "PHYSICAL DEFENSE", "DEFESA FISICA"],
+  "DEFM": ["DEFM", "DEF M", "MDEF", "M DEF", "MAGIC DEFENSE", "DEFESA MAGICA"],
+  "ATQF (Refino)": ["ATQF REF", "ATQF REFINO", "ATK REFINE"],
+  "ATQM (Refino)": ["ATQM REF", "ATQM REFINO", "MATK REFINE"],
+  "DEFF (Refino)": ["DEFF REF", "DEFF REFINO"],
+  "DEFM (Refino)": ["DEFM REF", "DEFM REFINO"],
+  "Precisão": ["PRECISAO", "PRECISION", "ACCURACY"],
+  "Esquiva": ["ESQUIVA", "FLEE", "EVASION"],
+  "PV Máx.%": ["PV MAX %", "PV MAXIMO %", "MAX HP %", "HP MAX %", "MAXIMUM HP %"],
+  "PM Máx.%": ["PM MAX %", "PM MAXIMO %", "MAX SP %", "SP MAX %", "MAXIMUM SP %"],
+  "TC Variável": ["TC VARIAVEL", "CONJURACAO VARIAVEL", "VARIABLE CAST TIME"],
+  "TC Fixo": ["TC FIXO", "CONJURACAO FIXA", "FIXED CAST TIME"],
+  "CRIT": ["CRIT", "CRITICAL"],
+  "RES CRIT": ["RES CRIT", "CRITICAL RES"],
+  "Ignorar DEFF": ["IGNORAR DEFF", "IGNORE PDEF"],
+  "Ignorar DEFM": ["IGNORAR DEFM", "IGNORE MDEF"]
+};
+
+const ocrRules: OcrRule[] = allStats.map(key => ({
+  key,
+  aliases: [key, ...(ocrAliases[key] ?? [])],
+  percent: key.includes("%")
+})).sort((a, b) => Math.max(...b.aliases.map(alias => normalizeText(alias).length))
+  - Math.max(...a.aliases.map(alias => normalizeText(alias).length)));
+
+type LabelMatch = { rule: OcrRule; start: number; end: number; aliasLength: number };
+
+function normalizeWithMap(value: string): { normalized: string; positions: number[] } {
+  let normalized = "";
+  const positions: number[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const folded = value[index].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    for (const character of folded) {
+      if (/[a-z0-9]/.test(character)) {
+        normalized += character;
+        positions.push(index);
+      }
+    }
+  }
+  return { normalized, positions };
+}
+
+function findLabelMatches(line: string): LabelMatch[] {
+  const { normalized, positions } = normalizeWithMap(line);
+  const candidates: LabelMatch[] = [];
+
+  for (const rule of ocrRules) {
+    for (const alias of rule.aliases) {
+      const foldedAlias = normalizeText(alias);
+      if (foldedAlias.length < 2) continue;
+      let searchFrom = 0;
+      while (searchFrom < normalized.length) {
+        const foundAt = normalized.indexOf(foldedAlias, searchFrom);
+        if (foundAt < 0) break;
+        const rawStart = positions[foundAt];
+        const rawEnd = positions[foundAt + foldedAlias.length - 1] + 1;
+        if (rawStart !== undefined && rawEnd > rawStart) {
+          candidates.push({
+            rule,
+            start: rawStart,
+            end: rawEnd,
+            aliasLength: foldedAlias.length
+          });
+        }
+        searchFrom = foundAt + 1;
+      }
+    }
+  }
+
+  candidates.sort((a, b) => a.start - b.start || b.aliasLength - a.aliasLength);
+  const selected: LabelMatch[] = [];
+  for (const candidate of candidates) {
+    const overlaps = selected.some(item =>
+      candidate.start < item.end && candidate.end > item.start
+    );
+    if (overlaps) continue;
+
+    const rawTail = line.slice(candidate.end, Math.min(
+      line.length,
+      candidates.find(item => item.start > candidate.start)?.start ?? line.length
+    ));
+    if (candidate.rule.percent && !rawTail.includes("%") && !/porcento/i.test(rawTail)) continue;
+    if (!candidate.rule.percent && rawTail.includes("%") && ["PV", "PM"].includes(candidate.rule.key)) {
+      const percentRule = selected.find(item =>
+        item.start === candidate.start && item.rule.percent
+      );
+      if (percentRule) continue;
+    }
+    selected.push(candidate);
+  }
+  return selected.sort((a, b) => a.start - b.start);
+}
+
+function numbersInText(value: string, percentage = false): number[] {
+  const matches = value.match(/[-+]?\d[\d.,]*/g) ?? [];
+  return matches
+    .map(item => parseNumber(item, percentage))
+    .filter(item => Number.isFinite(item));
 }
 
 function valuesFromOcr(text: string, sumDuplicates: boolean): StatValues {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   const output: StatValues = {};
-  for (let index = 0; index < lines.length; index += 1) {
-    const rule = matchRule(lines[index]);
-    if (!rule) continue;
 
-    let numericText = lines[index];
-    let found = numericText.match(/[-+]?\d[\d.,]*/)?.[0];
-    if (!found) {
-      for (let next = index + 1; next < Math.min(index + 3, lines.length); next += 1) {
-        if (matchRule(lines[next])) break;
-        found = lines[next].match(/[-+]?\d[\d.,]*/)?.[0];
-        if (found) break;
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const labels = findLabelMatches(line);
+    if (!labels.length) continue;
+
+    const inlineValues: (number | undefined)[] = labels.map((label, labelIndex) => {
+      const nextLabel = labels[labelIndex + 1];
+      const segment = line.slice(label.end, nextLabel?.start ?? line.length);
+      return numbersInText(segment, label.rule.percent)[0];
+    });
+
+    let followingNumbers: number[] = [];
+    if (inlineValues.some(value => value === undefined)) {
+      for (let nextIndex = lineIndex + 1; nextIndex < Math.min(lineIndex + 4, lines.length); nextIndex += 1) {
+        if (findLabelMatches(lines[nextIndex]).length) {
+          followingNumbers = [];
+          break;
+        }
+        followingNumbers = numbersInText(lines[nextIndex]);
+        if (followingNumbers.length) break;
       }
     }
-    if (!found) continue;
 
-    const parsed = parseNumber(found, rule.key.includes("%"));
-    if (!Number.isFinite(parsed)) continue;
-    if (sumDuplicates) output[rule.key] = (output[rule.key] ?? 0) + parsed;
-    else output[rule.key] = parsed;
+    labels.forEach((label, index) => {
+      const inlineValue = inlineValues[index];
+      let parsed = inlineValue;
+      if (parsed === undefined && labels.length > 1 && followingNumbers.length >= labels.length) {
+        parsed = followingNumbers[index];
+      } else if (parsed === undefined && followingNumbers.length) {
+        parsed = followingNumbers[0];
+      }
+      if (parsed === undefined) return;
+
+      if (sumDuplicates) output[label.rule.key] = (output[label.rule.key] ?? 0) + parsed;
+      else output[label.rule.key] = parsed;
+    });
   }
   return output;
 }
