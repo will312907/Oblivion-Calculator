@@ -697,10 +697,10 @@ export default function App() {
     }
     setBusy("character");
     try {
-      const texts = await recognizeImages(images);
-      const combined = texts.join("\n");
+      const recognized = await recognizeImages(images);
+      const combined = recognized.map(item => item.text).join("\n");
       setCharacterOcr(combined);
-      const parsed = valuesFromOcr(combined, false);
+      const parsed = valuesFromRecognizedImages(recognized, false);
       const metadata = extractCharacterMeta(combined);
       if (metadata.character) setCharacter(metadata.character);
       if (metadata.className) setCls(metadata.className);
@@ -745,9 +745,9 @@ export default function App() {
 
     setBusy(side);
     try {
-      const texts = await recognizeImages(images);
-      const combined = texts.join("\n");
-      const values = mergeEquipmentOcr(texts);
+      const recognized = await recognizeImages(images);
+      const combined = recognized.map(item => item.text).join("\n");
+      const values = valuesFromRecognizedImages(recognized, true);
       if (side === "current") {
         setCurrentGearOcr(combined);
         setCurrentGearStats(values);
