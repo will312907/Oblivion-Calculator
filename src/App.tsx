@@ -232,20 +232,21 @@ export default function App() {
   const hpDelta = hpNext - hpNow;
   const setStat = (name: string, value: string) => setStats(old => ({ ...old, [name]: value }));
 
-  function replaceImage(file: File, setter: React.Dispatch<React.SetStateAction<string>>) {
+  function replaceImage(file: File, setter: React.Dispatch<React.SetStateAction<string>>): boolean {
     if (!file.type.startsWith("image/")) {
       setNotice("Selecione um arquivo de imagem PNG, JPG ou WEBP.");
-      return;
+      return false;
     }
     if (file.size > 15 * 1024 * 1024) {
       setNotice("A imagem excede 15 MB. Reduza o tamanho e tente novamente.");
-      return;
+      return false;
     }
     const url = URL.createObjectURL(file);
     setter(previous => {
       if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
       return url;
     });
+    return true;
   }
 
   async function runOcr(file: File) {
@@ -373,8 +374,7 @@ export default function App() {
           </div>
           <div className="upload-row">
             <ImageUpload label="Print de atributos" image={profile} onChange={file => {
-              replaceImage(file, setProfile);
-              void runOcr(file);
+              if (replaceImage(file, setProfile)) void runOcr(file);
             }} />
             <div className="ocr-box">
               <b>Leitura OCR {busy && "· Processando…"}</b>
