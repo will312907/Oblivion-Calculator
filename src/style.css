@@ -87,3 +87,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
   .stat-head-compare,.stat-row-compare{min-width:570px}
   .comparison-legend{flex-direction:column;gap:7px}
 }
+
+.attribute-table-scroll{width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+.stat-head-compare,.stat-row-compare{min-width:600px}
+.stat-row-compare>span{overflow-wrap:anywhere}
+.stat-row-compare input{font-variant-numeric:tabular-nums}
+@media(max-width:720px){
+  .stat-head-compare,.stat-row-compare{min-width:570px}
+}
