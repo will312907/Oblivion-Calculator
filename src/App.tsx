@@ -124,7 +124,7 @@ type OcrRule = { key: string; aliases: string[]; percent?: boolean };
 
 const ocrAliases: Record<string, string[]> = {
   "FOR": ["FOR", "STR", "FORCA"],
-  "AGI": ["AGI", "AAGI", "AAG!", "AGILIDADE"],
+  "AGI": ["AGI", "AAGI", "AAG!", "DACI", "AGILIDADE"],
   "VIT": ["VIT", "VIR", "VITALIDADE"],
   "INT": ["INT", "INTELIGENCIA"],
   "DES": ["DES", "DEX", "DESTREZA"],
@@ -437,6 +437,44 @@ function valuesFromOcrLayout(words: OcrWord[]): StatValues {
   return output;
 }
 
+function mergeOcrWordSets(primary: OcrWord[], secondary: OcrWord[]): OcrWord[] {
+  const merged: OcrWord[] = [...primary];
+
+  for (const candidate of secondary) {
+    const candidateArea = Math.max(1, (candidate.bbox.x1 - candidate.bbox.x0) * (candidate.bbox.y1 - candidate.bbox.y0));
+    let duplicateIndex = -1;
+    let bestOverlap = 0;
+
+    merged.forEach((existing, index) => {
+      const left = Math.max(candidate.bbox.x0, existing.bbox.x0);
+      const top = Math.max(candidate.bbox.y0, existing.bbox.y0);
+      const right = Math.min(candidate.bbox.x1, existing.bbox.x1);
+      const bottom = Math.min(candidate.bbox.y1, existing.bbox.y1);
+      const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+      const existingArea = Math.max(1, (existing.bbox.x1 - existing.bbox.x0) * (existing.bbox.y1 - existing.bbox.y0));
+      const overlap = intersection / Math.min(candidateArea, existingArea);
+
+      if (overlap > 0.72 && overlap > bestOverlap) {
+        bestOverlap = overlap;
+        duplicateIndex = index;
+      }
+    });
+
+    if (duplicateIndex < 0) {
+      merged.push(candidate);
+      continue;
+    }
+
+    const existing = merged[duplicateIndex];
+    const existingArea = Math.max(1, (existing.bbox.x1 - existing.bbox.x0) * (existing.bbox.y1 - existing.bbox.y0));
+    const candidateScore = (candidate.confidence ?? 0) + 0.04 * (1 / Math.sqrt(candidateArea));
+    const existingScore = (existing.confidence ?? 0) + 0.04 * (1 / Math.sqrt(existingArea));
+    if (candidateScore > existingScore) merged[duplicateIndex] = candidate;
+  }
+
+  return merged;
+}
+
 function valuesFromRecognizedImages(images: RecognizedImage[], sumDuplicates: boolean): StatValues {
   const combined: StatValues = {};
   for (const image of images) {
@@ -694,29 +732,39 @@ export default function App() {
     const worker = await createWorker(["por", "eng"]);
     const results: RecognizedImage[] = [];
     try {
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-        preserve_interword_spaces: "1"
-      });
       for (const image of images) {
-        const result = await worker.recognize(image.file, {}, { blocks: true });
-        const blockData = result.data as unknown as {
-          blocks?: Array<{
-            paragraphs?: Array<{
-              lines?: Array<{
-                words?: OcrWord[];
+        await worker.setParameters({
+          tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+          preserve_interword_spaces: "1"
+        });
+        const blockResult = await worker.recognize(image.file, {}, { blocks: true });
+
+        await worker.setParameters({
+          tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+          preserve_interword_spaces: "1"
+        });
+        const sparseResult = await worker.recognize(image.file, {}, { blocks: true });
+
+        const readWords = (data: unknown): OcrWord[] => {
+          const blockData = data as {
+            blocks?: Array<{
+              paragraphs?: Array<{
+                lines?: Array<{ words?: OcrWord[] }>;
               }>;
             }>;
-          }>;
+          };
+          return (blockData.blocks ?? []).flatMap(block =>
+            (block.paragraphs ?? []).flatMap(paragraph =>
+              (paragraph.lines ?? []).flatMap(line => line.words ?? [])
+            )
+          );
         };
-        const words = (blockData.blocks ?? []).flatMap(block =>
-          (block.paragraphs ?? []).flatMap(paragraph =>
-            (paragraph.lines ?? []).flatMap(line => line.words ?? [])
-          )
-        );
+
+        const blockWords = readWords(blockResult.data);
+        const sparseWords = readWords(sparseResult.data);
         results.push({
-          text: result.data.text,
-          words
+          text: blockResult.data.text,
+          words: mergeOcrWordSets(blockWords, sparseWords)
         });
       }
     } finally {
