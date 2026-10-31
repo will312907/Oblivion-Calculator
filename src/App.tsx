@@ -125,7 +125,7 @@ type OcrRule = { key: string; aliases: string[]; percent?: boolean };
 const ocrAliases: Record<string, string[]> = {
   "FOR": ["FOR", "STR", "FORCA"],
   "AGI": ["AGI", "AAGI", "AAG!", "AGILIDADE"],
-  "VIT": ["VIT", "VITALIDADE"],
+  "VIT": ["VIT", "VIR", "VITALIDADE"],
   "INT": ["INT", "INTELIGENCIA"],
   "DES": ["DES", "DEX", "DESTREZA"],
   "SOR": ["SOR", "LUK", "SORTE"],
@@ -695,7 +695,7 @@ export default function App() {
     const results: RecognizedImage[] = [];
     try {
       await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
         preserve_interword_spaces: "1"
       });
       for (const image of images) {
