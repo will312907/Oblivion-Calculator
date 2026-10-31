@@ -150,10 +150,10 @@ const ocrAliases: Record<string, string[]> = {
   "Redução de Dano Mágico": ["REDUCAO DE DANO MAGICO", "REDUCAO DE D"],
   "Ignorar DEFF": ["IGNORAR DEFF", "IGNORAR DEF F"],
   "Ignorar DEFM": ["IGNORAR DEFM", "IGNORAR DEF M"],
-  "Ignorar DEFF %": ["IGNORAR DEFF %", "IGNORAR DEFF%"],
-  "Ignorar DEFM %": ["IGNORAR DEFM %", "IGNORAR DEFM%"],
+  "Ignorar DEFF %": ["IGNORAR DEFF %", "IGNORAR DEFF%", "IGNORAR DEFF9", "IGNORAR DEFF 9"],
+  "Ignorar DEFM %": ["IGNORAR DEFM %", "IGNORAR DEFM%", "IGNORAR DEFM9", "IGNORAR DEFM 9", "IGNORAR DEFM`"],
   "Bônus de Dano Fixo": ["BONUS DE DANO FIXO", "NUS DE DANO"],
-  "Dano Mágico Bônus": ["DANO MAGICO BONUS", "DANO M BONUS"],
+  "Dano Mágico Bônus": ["DANO MAGICO BONUS", "DANO M BONUS", "DANO M BONU"],
   "Redução de Dano Fixo": ["REDUCAO DE DANO FIXO", "ADUCAO DE DAR"],
   "Bônus de Dano à Distância": ["BONUS DE DANO A DISTANCIA", "IUS DE DANO JX"],
   "Redução de Dano à Distância": ["REDUCAO DE DANO A DISTANCIA", "CAO DE DANO J"],
@@ -329,7 +329,11 @@ function extractCharacterMeta(text: string): { character?: string; className?: C
   if (classIndex >= 0) {
     const ignored = /personagem|classe|build|detalhes|atributos|equipamento|automatica|nenhum|pactuado|id\d*|pv|pm/i;
     for (let index = classIndex - 1; index >= Math.max(0, classIndex - 7); index -= 1) {
-      const candidate = lines[index].replace(/[|:()[\]{}]/g, " ").replace(/\s+/g, " ").trim();
+      const candidate = lines[index]
+        .replace(/[|:()[\]{}]/g, " ")
+        .replace(/\s+/g, " ")
+        .replace(/^(?:BES|BSS|B8S)\s+/i, "")
+        .trim();
       if (!candidate || ignored.test(candidate) || !/[A-Za-zÀ-ÿ]{3}/.test(candidate)) continue;
       const words = candidate.split(" ").filter(Boolean);
       if (words.length <= 2 && candidate.length <= 24) {
