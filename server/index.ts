@@ -86,10 +86,12 @@ function makeMcpServer() {
     },
     async () => {
       const html = await readFile(path.join(distDirectory, "index.html"), "utf8");
-      const publicOrigin = process.env.PUBLIC_ORIGIN?.replace(/\/$/, "");
+      const publicOrigin = (process.env.PUBLIC_ORIGIN || process.env.RENDER_EXTERNAL_URL)?.replace(/\/$/, "");
       const externalResources = [
         "https://cdn.jsdelivr.net",
         "https://tessdata.projectnaptha.com",
+        "https://fonts.googleapis.com",
+        "https://fonts.gstatic.com",
       ];
       const resourceMeta = {
         ui: {
