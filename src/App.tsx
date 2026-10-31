@@ -149,18 +149,16 @@ const ocrAliases: Record<string, string[]> = {
   "Dano CRIT%": ["DANO CRIT%", "DANO CRIT %"],
   "Resistência a Dano CRIT %": ["RESISTENCIA A DANO CRIT", "RESISTENCIA DANO CRIT", "5 A DANO CRIT"],
   "Bônus de Dano Físico %": ["BONUS DE DANO FISICO", "NUS DE DANO F", "DANO FISICO", "NUS DE DANO FISICO"],
-  "Bônus de Dano Físico": ["BONUS DE DANO FISICO FIXO", "BONUS DANO FISICO FIXO", "BONUS DE DANO FISICO FLAT"],
+  "Bônus de Dano Físico": ["BONUS DE DANO FISICO", "BONUS DE DANO FISICO FIXO", "BONUS DANO FISICO FIXO", "BONUS DE DANO FISICO FLAT"],
   "Redução de Dano Físico %": ["REDUCAO DE DANO FISICO", "EDUCAO DE DAR", "EDUCAO DE DANO F"],
-  "Redução de Dano Físico": ["REDUCAO DE DANO FISICO FIXO", "REDUCAO DANO FISICO FIXO"],
+  "Redução de Dano Físico": ["REDUCAO DE DANO FISICO", "REDUCAO DE DANO FISICO FIXO", "REDUCAO DANO FISICO FIXO"],
   "Bônus de Dano Mágico %": ["BONUS DE DANO MAGICO", "NUS DANO M", "NUS DANO M%", "NUS DANO MAGICO"],
   "Redução de Dano Mágico %": ["REDUCAO DE DANO MAGICO", "REDUCAO DE D", "EDUCAO DE DANO M"],
   "Ignorar DEFF": ["IGNORAR DEFF", "IGNORAR DEF F"],
   "Ignorar DEFM": ["IGNORAR DEFM", "IGNORAR DEF M"],
   "Ignorar DEFF %": ["IGNORAR DEFF %", "IGNORAR DEFF%", "IGNORAR DEFF9", "IGNORAR DEFF 9"],
   "Ignorar DEFM %": ["IGNORAR DEFM %", "IGNORAR DEFM%", "IGNORAR DEFM9", "IGNORAR DEFM 9", "IGNORAR DEFM`"],
-  "Bônus de Dano Físico": ["BONUS DE DANO FISICO FIXO", "BONUS DE DANO FISICO"],
   "Dano Mágico Bônus": ["DANO MAGICO BONUS", "DANO M BONUS", "DANO M BONU"],
-  "Redução de Dano Físico": ["REDUCAO DE DANO FISICO FIXO", "REDUCAO DE DANO FISICO"],
   "Bônus de Dano à Distância": ["BONUS DE DANO A DISTANCIA", "IUS DE DANO JX"],
   "Redução de Dano à Distância": ["REDUCAO DE DANO A DISTANCIA", "CAO DE DANO J"],
   "Bônus de Dano Corpo a Corpo": ["BONUS DE DANO CORPO A CORPO", "3 ONUS DE DANC"],
@@ -263,15 +261,31 @@ function findLabelMatches(line: string): LabelMatch[] {
   const selected: LabelMatch[] = [];
   for (const candidate of candidates) {
     const immediateTail = line.slice(candidate.end);
-    const hasLabelPercent = /^\s*%/.test(immediateTail);
+    const hasLabelPercent = /^\\s*%/.test(immediateTail);
     const percentWasReadAsQuote = /^[’‘'`´]/.test(immediateTail);
     if (!candidate.rule.percent && hasLabelPercent && ["TC Variável", "TC Fixo"].includes(candidate.rule.key)) continue;
     if (candidate.rule.key === "Ignorar DEFM" && percentWasReadAsQuote) continue;
 
-    const overlaps = selected.some(item =>
+    const overlapping = selected.find(item =>
       candidate.start < item.end && candidate.end > item.start
     );
-    if (overlaps) continue;
+    if (overlapping) {
+      const physicalPair =
+        (candidate.rule.key === "Bônus de Dano Físico" && overlapping.rule.key === "Bônus de Dano Físico %") ||
+        (candidate.rule.key === "Bônus de Dano Físico %" && overlapping.rule.key === "Bônus de Dano Físico") ||
+        (candidate.rule.key === "Redução de Dano Físico" && overlapping.rule.key === "Redução de Dano Físico %") ||
+        (candidate.rule.key === "Redução de Dano Físico %" && overlapping.rule.key === "Redução de Dano Físico");
+      if (physicalPair && candidate.start === overlapping.start && candidate.end === overlapping.end) {
+        const rawNumber = immediateTail.match(/[-+]?\\d[\\d.,]*/)?.[0] ?? "";
+        const percentEvidence = immediateTail.includes("%") || /[.,]/.test(rawNumber);
+        const preferred = percentEvidence
+          ? (candidate.rule.percent ? candidate : overlapping.rule.percent ? overlapping : candidate)
+          : (!candidate.rule.percent ? candidate : !overlapping.rule.percent ? overlapping : candidate);
+        const index = selected.indexOf(overlapping);
+        if (index >= 0) selected[index] = preferred;
+      }
+      continue;
+    }
     selected.push(candidate);
   }
   return selected.sort((a, b) => a.start - b.start);
