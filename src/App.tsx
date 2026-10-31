@@ -417,7 +417,7 @@ function valuesFromOcrLayout(words: OcrWord[]): StatValues {
       const valueWords=pieces
         .filter(piece=>piece.word.bbox.x0>=endPiece.word.bbox.x1-1 && piece.word.bbox.x0<rightLimit)
         .map(piece=>piece.word)
-        .filter(word=>/[-+]?\d/.test(word.text));
+        .filter(word=>/[-+]?\d/.test(word.text) || /^[([]?[oO][)\]]?[%]?$/i.test(word.text));
       const numbers=valueWords
         .map(word=>parseNumber(word.text,label.rule.percent))
         .filter(Number.isFinite);
