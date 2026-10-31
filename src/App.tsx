@@ -119,7 +119,7 @@ const ocrAliases: Record<string, string[]> = {
   "ATQM": ["ATQM", "ATQ M", "MATK", "M ATK"],
   "DEFF": ["DEFF", "DEF F", "PDEF", "P DEF"],
   "DEFM": ["DEFM", "DEF M", "MDEF", "M DEF"],
-  "ATQF (Refino)": ["ATQF REF", "ATGF REF", "ATQF REFINO", "ATGF REFINO", "ATQF REFIN"],
+  "ATQF (Refino)": ["ATQF REF", "ATGF REF", "ATQGF REF", "ATQF REFINO", "ATGF REFINO", "ATQGF REFINO", "ATQF REFIN"],
   "ATQM (Refino)": ["ATQM REF", "ATQM REFINO", "ATQM REFINA"],
   "DEFF (Refino)": ["DEFF REF", "DEFF REFINO"],
   "DEFM (Refino)": ["DEFM REF", "DEFM REFINO"],
@@ -257,7 +257,7 @@ function findLabelMatches(line: string): LabelMatch[] {
     if (candidate.rule.percent && !hasLabelPercent && !/porcento/i.test(immediateTail.slice(0, 10))) {
       continue;
     }
-    if (!candidate.rule.percent && hasLabelPercent) continue;
+    if (!candidate.rule.percent && hasLabelPercent && ["TC Variável", "TC Fixo"].includes(candidate.rule.key)) continue;
 
     const overlaps = selected.some(item =>
       candidate.start < item.end && candidate.end > item.start
@@ -552,9 +552,13 @@ export default function App() {
 
   async function recognizeImages(images: ImageEntry[]): Promise<string[]> {
     if (!images.length) return [];
-    const worker = await createWorker("por");
+    const worker = await createWorker(["por", "eng"]);
     const texts: string[] = [];
     try {
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.SPARSE_TEXT,
+        preserve_interword_spaces: "1"
+      });
       for (const image of images) {
         const result = await worker.recognize(image.file);
         texts.push(result.data.text);
@@ -577,12 +581,19 @@ export default function App() {
       const combined = texts.join("\n");
       setCharacterOcr(combined);
       const parsed = valuesFromOcr(combined, false);
+      const metadata = extractCharacterMeta(combined);
+      if (metadata.character) setCharacter(metadata.character);
+      if (metadata.className) setCls(metadata.className);
       if (Object.keys(parsed).length) {
         setStats(previous => ({
           ...previous,
           ...Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value)]))
         }));
-        setNotice(`Leitura concluída: ${Object.keys(parsed).length} atributo(s) preenchido(s). Confira os valores reconhecidos.`);
+        const details = [
+          metadata.character ? `personagem: ${metadata.character}` : "",
+          metadata.className ? `classe: ${metadata.className}` : ""
+        ].filter(Boolean).join("; ");
+        setNotice(`Leitura concluída: ${Object.keys(parsed).length} atributo(s) preenchido(s)${details ? ` (${details})` : ""}. Confira os valores reconhecidos.`);
       } else {
         setNotice("As imagens foram carregadas, mas não reconheci atributos com segurança. Confira o texto OCR e tente um print mais nítido.");
       }
@@ -639,15 +650,20 @@ export default function App() {
 
   function applyCharacterOcr() {
     const parsed = valuesFromOcr(characterOcr, false);
-    if (!Object.keys(parsed).length) {
+    const metadata = extractCharacterMeta(characterOcr);
+    if (metadata.character) setCharacter(metadata.character);
+    if (metadata.className) setCls(metadata.className);
+    if (!Object.keys(parsed).length && !metadata.character && !metadata.className) {
       setNotice("Não encontrei pares de atributo e valor no texto. Revise a transcrição ou preencha manualmente.");
       return;
     }
-    setStats(previous => ({
-      ...previous,
-      ...Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value)]))
-    }));
-    setNotice(`${Object.keys(parsed).length} atributo(s) aplicado(s) a partir do texto revisado.`);
+    if (Object.keys(parsed).length) {
+      setStats(previous => ({
+        ...previous,
+        ...Object.fromEntries(Object.entries(parsed).map(([key, value]) => [key, String(value)]))
+      }));
+    }
+    setNotice(`${Object.keys(parsed).length} atributo(s) aplicado(s) a partir do texto revisado.${metadata.character ? ` Personagem: ${metadata.character}.` : ""}${metadata.className ? ` Classe: ${metadata.className}.` : ""}`);
   }
 
   function applyEquipmentOcr(side: "current" | "replacement") {
