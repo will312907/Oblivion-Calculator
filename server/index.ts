@@ -10,6 +10,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDirectory = path.resolve(__dirname, "../dist");
 const app = express();
 app.use(express.json({ limit: "10mb" }));
+
+// ChatGPT and other MCP clients connect from a separate origin.
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, MCP-Protocol-Version, MCP-Session-Id, Last-Event-Id");
+  res.setHeader("Access-Control-Expose-Headers", "MCP-Session-Id, MCP-Protocol-Version");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
 app.use("/assets", express.static(path.join(distDirectory, "assets"), {
   immutable: true,
   maxAge: "1y",
@@ -85,8 +98,11 @@ function makeMcpServer() {
       mimeType: "text/html;profile=mcp-app",
     },
     async () => {
-      const html = await readFile(path.join(distDirectory, "index.html"), "utf8");
       const publicOrigin = (process.env.PUBLIC_ORIGIN || process.env.RENDER_EXTERNAL_URL)?.replace(/\/$/, "");
+      const diskHtml = await readFile(path.join(distDirectory, "index.html"), "utf8");
+      const html = publicOrigin
+        ? diskHtml.replace(/(src|href)="\/assets\//g, `$1="${publicOrigin}/assets/`)
+        : diskHtml;
       const externalResources = [
         "https://cdn.jsdelivr.net",
         "https://tessdata.projectnaptha.com",
