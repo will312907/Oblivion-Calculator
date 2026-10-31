@@ -34,3 +34,56 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .hp-summary>div{min-width:0}
 .hp-summary b{font-variant-numeric:tabular-nums}
 @media(max-width:720px){.profile-fields label{font-size:9px}.calculation-warning{font-size:10px}.hp-summary{align-items:flex-start;flex-wrap:wrap}.hp-summary>strong{align-self:center}}
+
+/* Updated multi-image and OCR-first workflow */
+.hero{display:block;grid-template-columns:none}
+.profile-fields-hero{grid-template-columns:minmax(220px,2fr) minmax(170px,1fr);max-width:760px;margin-bottom:14px}
+.multi-upload{border:1px solid #ddd6c6;border-radius:12px;background:#fffdf7;padding:13px;min-width:0}
+.multi-upload-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:11px}
+.multi-upload-head>div{display:flex;flex-direction:column;gap:4px}
+.multi-upload-head b{font-size:12px;color:#263c79}
+.multi-upload-head small,.upload-count{font-size:10px;color:#8490a0}
+.upload-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #c6d0df;border-radius:8px;background:#e9eff6;color:#324f85;padding:9px 12px;font-size:10px;font-weight:800;white-space:nowrap;cursor:pointer}
+.upload-button input{display:none}
+.multi-upload-empty{min-height:106px;border:1px dashed #c8c3b6;border-radius:9px;background:#f4f2e9;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:7px;color:#8a96a6}
+.multi-upload-empty span{font-size:10px}
+.image-thumbnails{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:9px}
+.image-thumbnail{position:relative;min-width:0;border:1px solid #ded9cd;background:#f2f0e9;border-radius:8px;overflow:hidden;padding:5px 5px 7px}
+.image-thumbnail img{display:block;width:100%;height:78px;object-fit:contain;border-radius:5px;background:#e7e8e4}
+.image-thumbnail span{display:block;font-size:9px;color:#69788f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:5px 22px 0 2px}
+.image-thumbnail button{position:absolute;top:8px;right:8px;width:21px;height:21px;padding:0;border:1px solid #d4d1c8;border-radius:50%;background:#fffefa;color:#8a3737;display:grid;place-items:center;cursor:pointer}
+.upload-count{text-align:right;margin-top:9px}
+.ocr-progress{display:flex;align-items:center;gap:8px;color:#466493;font-size:11px;font-weight:700;margin:10px 2px}
+.ocr-box{margin-top:12px}
+.ocr-box-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ocr-box-head b{font-size:12px;color:#293e76}
+.small-button{padding:7px 10px;font-size:10px}
+.ocr-details{margin-top:10px;border-top:1px solid #e4dece;padding-top:10px}
+.ocr-details summary{font-size:10px;color:#52668a;font-weight:700;cursor:pointer}
+.ocr-details textarea{width:100%;height:76px;margin:9px 0;font-size:11px;resize:vertical}
+.stat-head-compare,.stat-row-compare{grid-template-columns:minmax(160px,1.7fr) minmax(100px,.9fr) minmax(100px,.9fr) minmax(100px,.9fr);gap:10px}
+.stat-row-compare input{width:100%;min-width:0}
+.stat-row-compare output{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#354e7e;overflow-wrap:anywhere}
+.stat-row-compare .positive{color:#16834a}
+.stat-row-compare .negative{color:#b93832}
+.stat-row-compare .neutral{color:#718096}
+.stat-head-compare{position:sticky;top:0;z-index:1}
+.comparison-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:13px;color:#778393;font-size:10px}
+.comparison-legend span{display:flex;align-items:center;gap:6px}
+.comparison-legend i{display:inline-block;width:8px;height:8px;border-radius:50%}
+.legend-current{background:#657caa}
+.legend-projected{background:#27965c}
+.calculation-warning{margin-top:11px}
+@media(max-width:720px){
+  .profile-fields-hero{grid-template-columns:1fr 1fr;max-width:none}
+  .multi-upload{padding:10px}
+  .multi-upload-head{align-items:flex-start;flex-direction:column}
+  .upload-button{width:100%}
+  .image-thumbnails{grid-template-columns:repeat(auto-fill,minmax(88px,1fr))}
+  .image-thumbnail img{height:65px}
+  .ocr-box-head{align-items:flex-start;flex-direction:column}
+  .ocr-box-head .small-button{width:100%;justify-content:center}
+  .equipment-grid{grid-template-columns:1fr}
+  .stat-head-compare,.stat-row-compare{min-width:570px}
+  .comparison-legend{flex-direction:column;gap:7px}
+}
