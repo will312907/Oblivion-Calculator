@@ -461,9 +461,17 @@ function mergeOcrWordSets(primary: OcrWord[], secondary: OcrWord[]): OcrWord[] {
       const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
       const existingArea = Math.max(1, (existing.bbox.x1 - existing.bbox.x0) * (existing.bbox.y1 - existing.bbox.y0));
       const overlap = intersection / Math.min(candidateArea, existingArea);
+      const sameText = normalizeText(candidate.text) === normalizeText(existing.text);
+      const candidateCenterX = (candidate.bbox.x0 + candidate.bbox.x1) / 2;
+      const candidateCenterY = (candidate.bbox.y0 + candidate.bbox.y1) / 2;
+      const existingCenterX = (existing.bbox.x0 + existing.bbox.x1) / 2;
+      const existingCenterY = (existing.bbox.y0 + existing.bbox.y1) / 2;
+      const nearSameToken = sameText
+        && Math.abs(candidateCenterX - existingCenterX) <= 12
+        && Math.abs(candidateCenterY - existingCenterY) <= 10;
 
-      if (overlap > 0.72 && overlap > bestOverlap) {
-        bestOverlap = overlap;
+      if ((overlap > 0.72 || nearSameToken) && Math.max(overlap, nearSameToken ? 0.73 : 0) > bestOverlap) {
+        bestOverlap = Math.max(overlap, nearSameToken ? 0.73 : 0);
         duplicateIndex = index;
       }
     });
