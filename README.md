@@ -1,5 +1,7 @@
 # OBLIVION CALCULATOR — ChatGPT App scaffold
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://dashboard.render.com/blueprint/new?repo=https%3A%2F%2Fgithub.com%2Fwill312907%2FOblivion-Calculator)
+
 Projeto React/Vite + servidor MCP para integração como aplicativo no ChatGPT.
 
 ## Preparado nesta versão
