@@ -687,14 +687,24 @@ export default function App() {
         preserve_interword_spaces: "1"
       });
       for (const image of images) {
-        const result = await worker.recognize(image.file);
+        const result = await worker.recognize(image.file, {}, { blocks: true });
+        const blockData = result.data as unknown as {
+          blocks?: Array<{
+            paragraphs?: Array<{
+              lines?: Array<{
+                words?: OcrWord[];
+              }>;
+            }>;
+          }>;
+        };
+        const words = (blockData.blocks ?? []).flatMap(block =>
+          (block.paragraphs ?? []).flatMap(paragraph =>
+            (paragraph.lines ?? []).flatMap(line => line.words ?? [])
+          )
+        );
         results.push({
           text: result.data.text,
-          words: (result.data.words ?? []).map(word => ({
-            text: word.text,
-            confidence: word.confidence,
-            bbox: word.bbox
-          }))
+          words
         });
       }
     } finally {
