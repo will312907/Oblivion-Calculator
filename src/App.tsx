@@ -108,7 +108,7 @@ type OcrRule = { key: string; aliases: string[]; percent?: boolean };
 
 const ocrAliases: Record<string, string[]> = {
   "FOR": ["FOR", "STR", "FORCA"],
-  "AGI": ["AGI", "AGILIDADE"],
+  "AGI": ["AGI", "AAGI", "AAG!", "AGILIDADE"],
   "VIT": ["VIT", "VITALIDADE"],
   "INT": ["INT", "INTELIGENCIA"],
   "DES": ["DES", "DEX", "DESTREZA"],
@@ -254,9 +254,6 @@ function findLabelMatches(line: string): LabelMatch[] {
   for (const candidate of candidates) {
     const immediateTail = line.slice(candidate.end);
     const hasLabelPercent = /^\s*%/.test(immediateTail);
-    if (candidate.rule.percent && !hasLabelPercent && !/porcento/i.test(immediateTail.slice(0, 10))) {
-      continue;
-    }
     if (!candidate.rule.percent && hasLabelPercent && ["TC Variável", "TC Fixo"].includes(candidate.rule.key)) continue;
 
     const overlaps = selected.some(item =>
