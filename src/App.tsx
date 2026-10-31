@@ -88,7 +88,13 @@ function normalizeText(value: string): string {
 
 function parseNumber(value: string | number, percentage = false): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  let normalized = String(value).trim().replace(/[%\s]/g, "").replace(/[^\d,.-]/g, "");
+  let raw = String(value).trim();
+  // The profile screen shows current/max values as "92694/92694"; use the current value.
+  const slashIndex = raw.indexOf("/");
+  if (slashIndex > 0 && /^[-+]?\d[\d.,]*$/.test(raw.slice(0, slashIndex).trim())) {
+    raw = raw.slice(0, slashIndex).trim();
+  }
+  let normalized = raw.replace(/[%\s]/g, "").replace(/[^\d,.-]/g, "");
   if (!normalized) return 0;
 
   const comma = normalized.lastIndexOf(",");
@@ -155,7 +161,7 @@ const ocrAliases: Record<string, string[]> = {
   "TC Fixo": ["TC FIXO", "CONJURACAO FIXA"],
   "TC Fixo %": ["TC FIXO %", "TC FIXO%", "CONJURACAO FIXA %"],
   "Efeito de Cura": ["EFEITO DE CURA"],
-  "Cura Recebida": ["CURA RECEBIDA", "URA RECEBIDA"],
+  "Cura Recebida": ["CURA RECEBIDA", "URA RECEBIDA", "URA RECEBIDAY"],
   "CRIT": ["CRIT", "CRITICO"],
   "RES CRIT": ["RES CRIT", "RES CRIT."],
   "Dano CRIT%": ["DANO CRIT%", "DANO CRIT %"],
