@@ -68,6 +68,18 @@ const groups: Record<StatGroup, string[]> = {
   Especial: special
 };
 const allStats = [...common, ...advanced, ...special];
+const percentageStatNames = new Set([
+  "VATQ%", "VMOV%", "TC Variável %", "TC Fixo %",
+  "Efeito de Cura", "Cura Recebida", "Dano CRIT%",
+  "Resistência a Dano CRIT %",
+  "Bônus de Dano Físico %", "Redução de Dano Físico %",
+  "Bônus de Dano Mágico %", "Redução de Dano Mágico %",
+  "Ignorar DEFF %", "Ignorar DEFM %",
+  ...special
+]);
+function isPercentStat(name: string): boolean {
+  return name.includes("%") || percentageStatNames.has(name);
+}
 const zeroStats: Record<string, string> = Object.fromEntries(allStats.map(name => [name, "0"]));
 
 function normalizeText(value: string): string {
@@ -207,7 +219,7 @@ const ocrAliases: Record<string, string[]> = {
 const ocrRules: OcrRule[] = allStats.map(key => ({
   key,
   aliases: [...new Set([key, ...(ocrAliases[key] ?? [])])],
-  percent: key.includes("%")
+  percent: isPercentStat(key)
 })).sort((a, b) =>
   Math.max(...b.aliases.map(alias => normalizeText(alias).length))
   - Math.max(...a.aliases.map(alias => normalizeText(alias).length))
@@ -589,7 +601,7 @@ function AttributeRows({
         <span>Diferença</span>
       </div>
       {names.length ? names.map(name => {
-        const current = parseNumber(currentValues[name] ?? "0", name.includes("%"));
+        const current = parseNumber(currentValues[name] ?? "0", isPercentStat(name));
         const projected = projectedValues[name] ?? current;
         const difference = projected - current;
         return (
@@ -600,9 +612,9 @@ function AttributeRows({
               value={currentValues[name] ?? "0"}
               onChange={event => onChange(name, event.target.value)}
             />
-            <output>{formatNumber(projected, name.includes("%"))}{name.includes("%") ? "%" : ""}</output>
+            <output>{formatNumber(projected, isPercentStat(name))}{isPercentStat(name) ? "%" : ""}</output>
             <output className={difference > 0 ? "positive" : difference < 0 ? "negative" : "neutral"}>
-              {difference > 0 ? "+" : ""}{formatNumber(difference, name.includes("%"))}{name.includes("%") ? " p.p." : ""}
+              {difference > 0 ? "+" : ""}{formatNumber(difference, isPercentStat(name))}{isPercentStat(name) ? " p.p." : ""}
             </output>
           </div>
         );
@@ -636,7 +648,7 @@ export default function App() {
   const projectedValues = useMemo(() => {
     const result: Record<string, number> = {};
     allStats.forEach(name => {
-      const current = parseNumber(stats[name] ?? "0", name.includes("%"));
+      const current = parseNumber(stats[name] ?? "0", isPercentStat(name));
       result[name] = current
         + (replacementGearStats[name] ?? 0)
         - (currentGearStats[name] ?? 0);
